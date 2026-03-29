@@ -1,0 +1,27 @@
+{
+  "name": "k5-custom-dashboard",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/StreamsByNight/k5-custom-dashboard.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/StreamsByNight/k5-custom-dashboard/issues"
+  },
+  "homepage": "https://github.com/StreamsByNight/k5-custom-dashboard#readme",
+  "dependencies": {
+    "axios": "^1.14.0",
+    "cookie-parser": "^1.4.7",
+    "express": "^5.2.1"
+  }
+}
