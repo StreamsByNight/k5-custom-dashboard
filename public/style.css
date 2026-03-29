@@ -2,11 +2,17 @@
 body { 
     margin: 0; 
     font-family: 'Lexend', 'Quicksand', 'Segoe UI', sans-serif; 
-    background: #E3F2FD; /* Sky Blue background from your image */
-    overflow: hidden;
+    background: #E3F2FD; 
+    /* CHANGED: Removed overflow: hidden to allow scrolling */
+    overflow-x: hidden; 
+    overflow-y: auto;
 }
 
-.app-container { display: flex; height: 100vh; }
+.app-container { 
+    display: flex; 
+    /* CHANGED: min-height allows the app to grow as long as the courses need */
+    min-height: 100vh; 
+}
 
 /* Sidebar - Matches Stride K12 Blue */
 .sidebar { 
@@ -18,6 +24,10 @@ body {
     align-items: center; 
     padding: 20px 0;
     z-index: 100;
+    /* FIXED: This keeps the sidebar from scrolling away */
+    position: sticky;
+    top: 0;
+    height: 100vh;
 }
 
 .logo { font-weight: 900; font-size: 1.5rem; margin-bottom: 40px; }
@@ -35,9 +45,11 @@ body {
 .content { 
     flex: 1; 
     padding: 30px; 
-    position: relative; /* Necessary for the fox/landscape to anchor */
+    position: relative; 
     display: flex;
     flex-direction: column;
+    /* CHANGED: Ensure background expands with content */
+    min-height: 100vh;
 }
 
 .top-bar { 
@@ -57,10 +69,12 @@ body {
     display: grid; 
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
     gap: 25px; 
-    z-index: 10; /* Above the grass, below the fox */
+    z-index: 10; 
+    /* CHANGED: Extra padding at bottom so courses don't hit the grass */
+    padding-bottom: 150px; 
 }
 
-/* The Course Card - Matches image_4f2f40.png */
+/* The Course Card */
 .course-card {
     background: white;
     border-radius: 15px;
@@ -101,25 +115,28 @@ body {
 /* THE FOREST THEME ELEMENTS */
 
 .forest-landscape {
-    position: absolute;
+    /* FIXED: Changed from absolute to fixed so the grass stays at the bottom of the screen while you scroll */
+    position: fixed; 
     bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 350px;
-    background-image: url('image_4f2f5b.jpg'); /* The forest image you uploaded */
+    left: 110px; /* Offset for sidebar */
+    width: calc(100% - 110px);
+    height: 250px;
+    background-image: url('https://k5-custom-dashboard.onrender.com/image_4f2f5b.jpg'); 
     background-size: cover;
     background-position: bottom;
-    z-index: 1;
-    pointer-events: none; /* Allows you to click things "through" the grass */
+    z-index: 5;
+    pointer-events: none; 
 }
 
 .fox-island {
-    position: absolute;
+    /* FIXED: Changed to fixed so the fox stays in the corner of your eye while scrolling */
+    position: fixed;
     bottom: 30px;
     right: 30px;
-    width: 260px;
-    z-index: 50; /* Top layer */
+    width: 220px;
+    z-index: 50; 
     filter: drop-shadow(0 10px 15px rgba(0,0,0,0.2));
+    pointer-events: none;
 }
 .fox-island img { width: 100%; }
 
@@ -139,8 +156,3 @@ body {
     border-radius: 20px;
     text-align: center;
 }
-.theme-options { display: flex; justify-content: space-around; margin: 20px 0; }
-.theme-opt { 
-    padding: 10px; border: 2px solid #eee; border-radius: 10px; cursor: pointer; 
-}
-.theme-opt.active { border-color: #0066FF; background: #E3F2FD; }
