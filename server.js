@@ -8,9 +8,9 @@ app.use(express.static('public'));
 
 // 1. These come from your Canvas Developer Key settings
 const CANVAS_API_URL = 'https://stridek12academy.com/api/v1';
-const CLIENT_ID = process.env.CANVAS_CLIENT_ID; 
+const CLIENT_ID = process.env.CANVAS_CLIENT_ID;
 const CLIENT_SECRET = process.env.CANVAS_CLIENT_SECRET;
-const REDIRECT_URI = 'https://your-app-name.onrender.com/auth/canvas/callback';
+const REDIRECT_URI = 'https://k5-custom-dashboard.onrender.com/auth/canvas/callback';
 
 // STEP A: The Login Route
 // This sends the student to the Stride K12 login page
