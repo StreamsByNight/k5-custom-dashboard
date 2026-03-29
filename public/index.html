@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="style.css">
     <title>K5 Dashboard</title>
 </head>
@@ -10,24 +11,57 @@
         <nav class="sidebar">
             <div class="logo">K12</div>
             <div class="nav-items">
-                <div class="nav-item active">Dashboard</div>
-                <div class="nav-item">Courses</div>
-                <div class="nav-item">Calendar</div>
+                <div class="nav-item active">
+                    <span class="nav-icon">🏠</span> Dashboard
+                </div>
+                <div class="nav-item">
+                    <span class="nav-icon">📚</span> Courses
+                </div>
+                <div class="nav-item">
+                    <span class="nav-icon">📅</span> Calendar
+                </div>
             </div>
         </nav>
 
         <main class="content">
             <header class="top-bar">
                 <div class="tabs">
-                    <button class="tab active">Courses</button>
-                    <button class="tab">Agenda</button>
+                    <button class="tab active" onclick="switchTab('courses')">Courses</button>
+                    <button class="tab" onclick="switchTab('agenda')">Agenda</button>
+                    <button class="tab" onclick="switchTab('announcements')">Announcements</button>
                 </div>
-                <div class="user-profile">Settings</div>
+                <div class="user-meta">
+                    <span class="user-name">Gradebook, Coco</span>
+                    <button class="settings-btn" id="settingsBtn">Settings</button>
+                </div>
             </header>
 
             <section id="course-grid" class="grid">
-                </section>
+                <p class="loading-text">Loading your forest...</p>
+            </section>
+
+            <div class="forest-landscape"></div>
+
+            <div class="fox-island">
+                <img src="image_4f3225.png" alt="Fox Mascot">
+            </div>
         </main>
     </div>
+
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <h3>Dashboard Settings</h3>
+            <hr>
+            <p>Choose your theme:</p>
+            <div class="theme-options">
+                <button class="theme-opt active">Forest</button>
+                <button class="theme-opt">Winter</button>
+                <button class="theme-opt">Space</button>
+            </div>
+            <button class="close-modal" id="closeModal">Close</button>
+        </div>
+    </div>
+
+    <script src="dashboard.js"></script>
 </body>
 </html>
