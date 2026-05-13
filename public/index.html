@@ -3,23 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="/">
     <link rel="stylesheet" href="style.css">
     <title>K5 Dashboard</title>
 </head>
-<body>
-    <div class="app-container">
+<body class="dashboard-theme-forest"> <div class="app-container">
         <nav class="sidebar">
             <div class="logo">K12</div>
             <div class="nav-items">
-                <div class="nav-item active">
+                <div class="nav-item active" id="nav-dashboard">
                     <span class="nav-icon">🏠</span> Dashboard
                 </div>
-                <div class="nav-item">
+                <div class="nav-item" onclick="window.open('https://stridek12academy.com', '_blank')">
                     <span class="nav-icon">📚</span> Courses
                 </div>
-                <div class="nav-item">
+                <div class="nav-item" id="nav-calendar">
                     <span class="nav-icon">📅</span> Calendar
                 </div>
+            </div>
+            <div class="nav-footer">
+                <a href="/logout" class="logout-link">Logout</a>
             </div>
         </nav>
 
@@ -31,20 +34,21 @@
                     <button class="tab" onclick="switchTab('announcements')">Announcements</button>
                 </div>
                 <div class="user-meta">
-                    <span class="user-name">Gradebook, Coco</span>
+                    <span class="user-name" id="display-name">Loading...</span>
                     <button class="settings-btn" id="settingsBtn">Settings</button>
                 </div>
             </header>
 
-            <section id="course-grid" class="grid">
+            <section id="main-display" class="grid">
                 <p class="loading-text">Loading your forest...</p>
             </section>
 
             <div class="forest-landscape"></div>
-
             <div class="fox-island">
-                <img src="image_4f3225.png" alt="Fox Mascot">
+                <img src="fox-mascot.png" alt="Fox Mascot" id="mascot-img">
             </div>
+            
+            <div id="fireworks-container" class="hidden"></div>
         </main>
     </div>
 
@@ -54,14 +58,75 @@
             <hr>
             <p>Choose your theme:</p>
             <div class="theme-options">
-                <button class="theme-opt active">Forest</button>
-                <button class="theme-opt">Winter</button>
-                <button class="theme-opt">Space</button>
+                <button class="theme-opt active" onclick="setTheme('forest')">Forest</button>
+                <button class="theme-opt" onclick="setTheme('winter')">Winter</button>
+                <button class="theme-opt" onclick="setTheme('space')">Space</button>
             </div>
             <button class="close-modal" id="closeModal">Close</button>
         </div>
     </div>
 
+    <script>
+        /**
+         * AUTHENTICATION CHECK
+         * When launched from the Canvas Sidebar (Globe Icon), we check if 
+         * we have a session. If not, we trigger the OAuth flow.
+         */
+        async function checkAuth() {
+            try {
+                const res = await fetch('/api/profile');
+                if (res.status === 401) {
+                    // Not authorized - redirect to the server's login route
+                    window.location.href = '/login';
+                    return;
+                }
+                const data = await res.json();
+                document.getElementById('display-name').innerText = data.short_name || data.name;
+                
+                // Initialize the dashboard data after auth is confirmed
+                if (window.initDashboard) window.initDashboard();
+                
+            } catch (err) {
+                console.error("Auth check failed:", err);
+            }
+        }
+
+        // Run auth check immediately on load
+        checkAuth();
+
+        // Simple Tab Switcher Logic
+        function switchTab(type) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            const display = document.getElementById('main-display');
+            display.innerHTML = `<p class="loading-text">Loading ${type}...</p>`;
+            
+            // This would call functions in your dashboard.js to fetch data
+            if (type === 'courses') loadCourses();
+            if (type === 'agenda') loadAgenda();
+        }
+
+        // Theme Switcher Logic
+        function setTheme(theme) {
+            document.body.className = `dashboard-theme-${theme}`;
+            localStorage.setItem('k5_theme', theme);
+            // Update UI buttons
+            document.querySelectorAll('.theme-opt').forEach(btn => {
+                btn.classList.toggle('active', btn.innerText.toLowerCase() === theme);
+            });
+        }
+
+        // Load saved theme
+        const savedTheme = localStorage.getItem('k5_theme') || 'forest';
+        setTheme(savedTheme);
+
+        // Modal Controls
+        const modal = document.getElementById('settingsModal');
+        document.getElementById('settingsBtn').onclick = () => modal.style.display = 'block';
+        document.getElementById('closeModal').onclick = () => modal.style.display = 'none';
+        window.onclick = (event) => { if (event.target == modal) modal.style.display = 'none'; }
+    </script>
     <script src="dashboard.js"></script>
 </body>
 </html>
