@@ -16,10 +16,9 @@ const CLIENT_ID = process.env.CANVAS_CLIENT_ID;
 const CLIENT_SECRET = process.env.CANVAS_CLIENT_SECRET;
 const REDIRECT_URI = 'https://k5-custom-dashboard.onrender.com/auth/canvas/callback';
 
-// --- LTI HANDSHAKE (Fixes "Cannot POST /") ---
+// --- LTI HANDSHAKE ---
 app.post('/', (req, res) => {
-    // When the Globe icon is clicked, Canvas POSTs here. 
-    // We serve the index.html so the React app can load and check the cookie.
+    // Prevents "Cannot POST /" when clicking the Globe icon in Canvas
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
@@ -41,7 +40,7 @@ app.get('/auth/canvas/callback', async (req, res) => {
             code: code
         });
         const userToken = response.data.access_token;
-        // Secure cookie for 30 days
+        // sameSite: 'none' and secure: true are required for embedding in Canvas Iframes
         res.cookie('canvas_token', userToken, { 
             httpOnly: true, 
             secure: true, 
@@ -62,7 +61,7 @@ app.get('/logout', (req, res) => {
 
 // --- API ROUTES (K-5 Specific) ---
 
-// Get Student Profile
+// 1. Profile Data
 app.get('/api/profile', async (req, res) => {
     const userToken = req.cookies.canvas_token;
     if (!userToken) return res.status(401).json({ error: 'Not logged in' });
@@ -77,7 +76,24 @@ app.get('/api/profile', async (req, res) => {
     }
 });
 
-// Matches the endpoint used in the K-5 source for "Agenda" and Mastery Paths
+// 2. Course Data (Required by your frontend renderCourseCards)
+app.get('/api/courses', async (req, res) => {
+    const userToken = req.cookies.canvas_token;
+    if (!userToken) return res.status(401).json({ error: 'Not logged in' });
+
+    try {
+        const response = await axios.get(`${CANVAS_API_URL}/courses`, {
+            params: { include: ['enrollments'], enrollment_state: 'active' },
+            headers: { 'Authorization': `Bearer ${userToken}` }
+        });
+        // Filter out courses that don't have a name (like blank shells)
+        res.json(response.data.filter(c => c.name));
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch courses' });
+    }
+});
+
+// 3. Planner/Agenda Data
 app.get(['/api/assignments', '/api/planner'], async (req, res) => {
     const userToken = req.cookies.canvas_token;
     if (!userToken) return res.status(401).json({ error: 'Not logged in' });
@@ -86,8 +102,6 @@ app.get(['/api/assignments', '/api/planner'], async (req, res) => {
         const response = await axios.get(`${CANVAS_API_URL}/planner/items`, {
             headers: { 'Authorization': `Bearer ${userToken}` }
         });
-        
-        // Add K-5 specific metadata (like fireworks logic)
         res.json({
             planner: response.data,
             showFireworks: response.data.length === 0,
@@ -98,7 +112,7 @@ app.get(['/api/assignments', '/api/planner'], async (req, res) => {
     }
 });
 
-// Supports the "Class Connect" logic for both students and coaches
+// 4. Live Sessions (Mock Data)
 app.get(['/api/classconnect', '/api/coach/classconnect'], (req, res) => {
     const now = new Date();
     res.json([{
@@ -112,10 +126,12 @@ app.get(['/api/classconnect', '/api/coach/classconnect'], (req, res) => {
     }]);
 });
 
-// --- FALLBACK ---
+// --- FALLBACK (FIXED FOR NODE V22) ---
 
-// Catch-all: Ensures React Router works when a user refreshes the page on a sub-route
-app.get('*', (req, res) => {
+/** * Use '/:path*' instead of '*' to satisfy the new path-to-regexp 
+ * requirements in Node.js v22/Express.
+ */
+app.get('/:path*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
