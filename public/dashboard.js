@@ -5,36 +5,43 @@
 async function initDashboard() {
     const grid = document.getElementById('course-grid');
     
-    // 1. Fetch student name first
+    // 1. Fetch student name and update UI
     await fetchStudentName();
 
     // 2. Setup Tab Clicking (Courses vs Agenda/Calendar)
     setupTabs();
 
+    // 3. Setup Theme listener (if settings modal is used)
+    const savedTheme = localStorage.getItem('k5_theme') || 'forest';
+    document.body.className = `dashboard-theme-${savedTheme}`;
+
     try {
-        // 3. Default view: Load Courses
+        // 4. Default view: Load Courses
         await loadCourses();
     } catch (err) {
         console.error("Dashboard Error:", err);
-        grid.innerHTML = `<p>Oops! Something went wrong. Please refresh.</p>`;
+        if (grid) grid.innerHTML = `<p>Oops! Something went wrong. Please refresh.</p>`;
     }
 }
 
-// NEW: Fetches the real student name from your server
+// Fetches the real student name from your Node server
 async function fetchStudentName() {
     try {
         const response = await fetch('/api/profile');
         if (response.ok) {
             const user = await response.json();
             const nameElement = document.querySelector('.user-name');
-            if (nameElement) nameElement.innerText = user.short_name || user.name;
+            // short_name is a standard Canvas field, falling back to name
+            if (nameElement) nameElement.innerText = user.short_name || user.name || "Student";
+        } else if (response.status === 401) {
+            showLoginScreen();
         }
     } catch (err) {
         console.log("Could not fetch name");
     }
 }
 
-// NEW: Makes the Top Tabs clickable
+// Makes the Top Tabs clickable
 function setupTabs() {
     const tabs = document.querySelectorAll('.tab');
     tabs.forEach(tab => {
@@ -43,12 +50,11 @@ function setupTabs() {
             tabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
 
-            // Logic: Load different data based on tab text
             const text = tab.innerText.toLowerCase();
             if (text === 'courses') {
                 await loadCourses();
-            } else if (text === 'agenda' || text === 'calendar') {
-                await loadCalendar();
+            } else if (text === 'agenda' || text === 'announcements') {
+                await loadAgenda(); // Using the planner/agenda logic
             }
         });
     });
@@ -56,21 +62,27 @@ function setupTabs() {
 
 async function loadCourses() {
     const grid = document.getElementById('course-grid');
-    grid.innerHTML = '<p>Loading your classes...</p>';
-
-    const response = await fetch('/api/courses');
-
-    if (response.status === 401) {
-        showLoginScreen();
-        return;
-    }
-
-    const courses = await response.json();
+    if (!grid) return;
     
-    if (courses.length === 0) {
-        showEmptyState();
-    } else {
-        renderCourseCards(courses);
+    grid.innerHTML = '<p class="loading-text">Loading your classes...</p>';
+
+    try {
+        const response = await fetch('/api/courses');
+
+        if (response.status === 401) {
+            showLoginScreen();
+            return;
+        }
+
+        const courses = await response.json();
+        
+        if (!courses || courses.length === 0) {
+            showEmptyState();
+        } else {
+            renderCourseCards(courses);
+        }
+    } catch (err) {
+        grid.innerHTML = '<p>Unable to load courses. Please check your connection.</p>';
     }
 }
 
@@ -79,6 +91,7 @@ function renderCourseCards(courses) {
     grid.innerHTML = ''; 
 
     courses.forEach(course => {
+        // Extracting grade data from the enrollment object
         const enrollment = course.enrollments ? course.enrollments[0] : null;
         const score = enrollment ? Math.round(enrollment.computed_current_score || 0) : 0;
         const gradeLetter = enrollment ? enrollment.computed_current_grade || '--' : '--';
@@ -88,15 +101,17 @@ function renderCourseCards(courses) {
 
         const card = document.createElement('div');
         card.className = 'course-card';
-        
-        // NEW: Makes the course clickable to open in Stride
         card.style.cursor = 'pointer';
+        
+        // Open the specific course in Canvas in a new tab
         card.onclick = () => window.open(`https://stridek12academy.com/courses/${course.id}`, '_blank');
 
         card.innerHTML = `
             <div class="card-header" style="background-color: ${themeColor}">
-                <img src="${icon}" style="width: 30px; height: 30px;">
-                <h3>${course.course_code || 'Class'}</h3>
+                <div class="subject-icon-bg">
+                    <img src="${icon}" alt="icon" style="width: 40px; height: 40px;">
+                </div>
+                <h3>${course.course_code || 'Course'}</h3>
             </div>
             <div class="card-body">
                 <p class="course-name">${course.name}</p>
@@ -112,74 +127,88 @@ function renderCourseCards(courses) {
     });
 }
 
-// NEW: Fetches and renders Calendar Events
-async function loadCalendar() {
+// Fetches and renders Agenda items (Planner API)
+async function loadAgenda() {
     const grid = document.getElementById('course-grid');
-    grid.innerHTML = '<p>Looking at your schedule...</p>';
+    grid.innerHTML = '<p class="loading-text">Looking at your schedule...</p>';
 
-    const response = await fetch('/api/calendar');
-    const events = await response.json();
+    try {
+        const response = await fetch('/api/assignments'); // Matches the planner route in our server
+        const data = await response.json();
+        const items = data.planner || [];
 
-    grid.innerHTML = '';
+        grid.innerHTML = '';
 
-    if (events.length === 0) {
-        grid.innerHTML = '<p>No lessons today! Time to play.</p>';
-        return;
+        if (items.length === 0) {
+            grid.innerHTML = `
+                <div class="completion-state" style="text-align: center; grid-column: 1/-1;">
+                    <h2 class="completion-text">All Done!</h2>
+                    <p>You have finished all your work for today.</p>
+                </div>
+            `;
+            return;
+        }
+
+        items.forEach(item => {
+            const itemCard = document.createElement('div');
+            itemCard.className = 'course-card agenda-card';
+            
+            // Logic to determine type (Assignment vs Quiz vs Page)
+            const typeLabel = item.plannable_type.replace('_', ' ');
+            const date = new Date(item.plannable.todo_date || item.plannable.due_at);
+            const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            itemCard.innerHTML = `
+                <div class="card-body">
+                    <span class="type-pill">${typeLabel}</span>
+                    <h3 style="margin: 10px 0; color: #0066FF;">${item.plannable.title}</h3>
+                    <p>⏰ Due: ${timeStr}</p>
+                    <button class="join-btn" onclick="window.open('${item.html_url}', '_blank')">Start Lesson</button>
+                </div>
+            `;
+            grid.appendChild(itemCard);
+        });
+    } catch (err) {
+        grid.innerHTML = '<p>Could not load agenda items.</p>';
     }
-
-    events.forEach(event => {
-        const eventCard = document.createElement('div');
-        eventCard.className = 'course-card';
-        eventCard.style.borderLeft = "8px solid #FFC107";
-        eventCard.style.cursor = "pointer";
-        
-        // Click to open main calendar
-        eventCard.onclick = () => window.open(`https://stridek12academy.com/calendar`, '_blank');
-
-        const startTime = new Date(event.start_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-        eventCard.innerHTML = `
-            <div class="card-body">
-                <h3 style="margin: 0; color: #0066FF;">${event.title}</h3>
-                <p style="font-weight: bold; margin-top: 10px;">⏰ ${startTime}</p>
-                <p>Click to join lesson</p>
-            </div>
-        `;
-        grid.appendChild(eventCard);
-    });
 }
 
 function getSubjectIcon(name) {
     const n = name.toLowerCase();
     if (n.includes('math')) return 'image_4f3261.png';
-    if (n.includes('ela') || n.includes('reading')) return 'image_4f3266.png';
+    if (n.includes('ela') || n.includes('reading') || n.includes('language')) return 'image_4f3266.png';
     if (n.includes('science')) return 'image_4f322b.png';
-    return 'image_4f2f80.png'; // Default book
+    if (n.includes('history') || n.includes('social')) return 'image_4f2f80.png';
+    return 'image_4f2f80.png'; // Default book icon
 }
 
 function getSubjectColor(courseName) {
     const name = courseName.toLowerCase();
-    if (name.includes('math')) return '#4CAF50';
-    if (name.includes('ela') || name.includes('reading')) return '#FF5722';
-    if (name.includes('science')) return '#2196F3';
-    return '#0066FF';
+    if (name.includes('math')) return '#4CAF50'; // Green
+    if (name.includes('ela') || name.includes('reading')) return '#FF5722'; // Orange
+    if (name.includes('science')) return '#2196F3'; // Blue
+    if (name.includes('history')) return '#795548'; // Brown
+    return '#0066FF'; // Stride Blue
 }
 
 function showLoginScreen() {
+    // If the session is expired or missing, show a friendly Stride Login
     document.body.innerHTML = `
-        <div class="login-container" style="text-align: center; padding-top: 100px; font-family: sans-serif;">
-            <img src="image_4f3225.png" style="width: 200px;">
-            <h1>Welcome to your Dashboard!</h1>
-            <p>Please log in with your Stride K12 account to see your classes.</p>
+        <div class="login-container" style="text-align: center; padding-top: 100px; font-family: 'Comic Sans MS', sans-serif;">
+            <img src="fox-mascot.png" style="width: 180px; margin-bottom: 20px;">
+            <h1 style="color: #0066FF;">Ready to Learn?</h1>
+            <p>Click the button below to sign into your Stride K12 Dashboard!</p>
             <a href="/login" class="login-btn" style="
                 background: #0066FF; 
                 color: white; 
-                padding: 15px 30px; 
+                padding: 18px 40px; 
                 text-decoration: none; 
-                border-radius: 25px;
+                border-radius: 30px;
+                font-size: 1.2rem;
                 font-weight: bold;
                 display: inline-block;
-                margin-top: 20px;
+                margin-top: 25px;
+                box-shadow: 0 4px 15px rgba(0,102,255,0.3);
             ">Log In with Canvas</a>
         </div>
     `;
@@ -187,12 +216,14 @@ function showLoginScreen() {
 
 function showEmptyState() {
     const grid = document.getElementById('course-grid');
+    if (!grid) return;
     grid.innerHTML = `
         <div class="empty-state" style="text-align: center; grid-column: 1 / -1; padding: 50px;">
-            <img src="image_4f3225.png" alt="No courses" style="width: 200px;">
-            <p>No active courses found. Check back later!</p>
+            <img src="fox-mascot.png" alt="No courses" style="width: 150px; opacity: 0.7;">
+            <p style="font-size: 1.2rem; margin-top: 20px;">No active classes found right now. Check back soon!</p>
         </div>
     `;
 }
 
+// Start the dashboard once the HTML is ready
 document.addEventListener('DOMContentLoaded', initDashboard);
