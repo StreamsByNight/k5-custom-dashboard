@@ -7,7 +7,9 @@ const app = express();
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-app.use(express.static('public'));
+
+// 1. Serve static files FIRST to prevent the "Loading" loop
+app.use(express.static(path.join(__dirname, 'public')));
 
 // --- CONFIGURATION ---
 const CANVAS_API_URL = 'https://stridek12academy.com/api/v1';
@@ -21,13 +23,21 @@ app.post('/', (req, res) => {
 });
 
 // --- OAUTH ROUTES ---
+
 app.get('/login', (req, res) => {
-    const canvasAuthUrl = `https://stridek12academy.com/login/oauth2/auth?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${REDIRECT_URI}&scope=url:get|/api/v1/courses url:get|/api/v1/calendar_events url:get|/api/v1/users/self url:get|/api/v1/planner/items`;
+    // ADDED 'prompt=none': This bypasses the "Authorize" screen if they've clicked it once before.
+    const canvasAuthUrl = `https://stridek12academy.com/login/oauth2/auth?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${REDIRECT_URI}&scope=url:get|/api/v1/courses url:get|/api/v1/calendar_events url:get|/api/v1/users/self url:get|/api/v1/planner/items&prompt=none`;
     res.redirect(canvasAuthUrl);
 });
 
 app.get('/auth/canvas/callback', async (req, res) => {
-    const { code } = req.query;
+    const { code, error } = req.query;
+
+    // Handle the case where prompt=none fails (e.g., first time users)
+    if (error === 'interaction_required') {
+        return res.redirect(`https://stridek12academy.com/login/oauth2/auth?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${REDIRECT_URI}&scope=url:get|/api/v1/courses url:get|/api/v1/calendar_events url:get|/api/v1/users/self url:get|/api/v1/planner/items`);
+    }
+
     try {
         const response = await axios.post('https://stridek12academy.com/login/oauth2/token', {
             grant_type: 'authorization_code',
@@ -36,7 +46,10 @@ app.get('/auth/canvas/callback', async (req, res) => {
             redirect_uri: REDIRECT_URI,
             code: code
         });
+        
         const userToken = response.data.access_token;
+        
+        // sameSite: 'none' is required for the dashboard to work inside a Canvas Iframe
         res.cookie('canvas_token', userToken, { 
             httpOnly: true, 
             secure: true, 
@@ -44,9 +57,9 @@ app.get('/auth/canvas/callback', async (req, res) => {
             maxAge: 30 * 24 * 60 * 60 * 1000 
         });
         res.redirect('/'); 
-    } catch (error) {
-        console.error('OAuth Error:', error.response?.data || error.message);
-        res.status(500).send('Login failed.');
+    } catch (err) {
+        console.error('OAuth Error:', err.response?.data || err.message);
+        res.status(500).send('Login failed. Please refresh Canvas.');
     }
 });
 
@@ -91,17 +104,17 @@ app.get(['/api/assignments', '/api/planner'], async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Planner error' }); }
 });
 
-// --- CATCH-ALL (FIXED FOR NODE V22) ---
+// --- CATCH-ALL (FIXED FOR NODE V22 & LOADING ISSUE) ---
 
-/** * Using a Regular Expression ensures that Node v22 won't crash.
- * This matches any route that DOES NOT start with /api, /login, or /auth.
- */
-app.get(/^(?!\/(api|login|auth|logout)).+/, (req, res) => {
+app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Also handle the root specifically
-app.get('/', (req, res) => {
+// This catch-all ensures we don't accidentally serve index.html when the browser wants dashboard.js
+app.get('*', (req, res, next) => {
+    if (req.url.startsWith('/api') || req.url.includes('.')) {
+        return next();
+    }
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
