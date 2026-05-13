@@ -8,7 +8,7 @@ app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// 1. Serve static files FIRST to ensure dashboard.js and style.css load correctly
+// 1. Serve static files FIRST
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- CONFIGURATION ---
@@ -19,14 +19,13 @@ const REDIRECT_URI = 'https://k5-custom-dashboard.onrender.com/auth/canvas/callb
 
 // --- LTI HANDSHAKE ---
 app.post('/', (req, res) => {
-    // Serves the dashboard when launched via the Canvas sidebar globe icon
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // --- OAUTH ROUTES ---
 
 app.get('/login', (req, res) => {
-    // Added 'prompt=none' to bypass the "Authorize" screen for returning users
+    // prompt=none makes it skip the authorize button for returning users
     const canvasAuthUrl = `https://stridek12academy.com/login/oauth2/auth?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${REDIRECT_URI}&scope=url:get|/api/v1/courses url:get|/api/v1/calendar_events url:get|/api/v1/users/self url:get|/api/v1/planner/items&prompt=none`;
     res.redirect(canvasAuthUrl);
 });
@@ -34,7 +33,7 @@ app.get('/login', (req, res) => {
 app.get('/auth/canvas/callback', async (req, res) => {
     const { code, error } = req.query;
 
-    // Fallback: If 'prompt=none' fails because it's the user's first time, redirect to normal login
+    // Handle first-time users where prompt=none fails
     if (error === 'interaction_required') {
         return res.redirect(`https://stridek12academy.com/login/oauth2/auth?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${REDIRECT_URI}&scope=url:get|/api/v1/courses url:get|/api/v1/calendar_events url:get|/api/v1/users/self url:get|/api/v1/planner/items`);
     }
@@ -50,7 +49,6 @@ app.get('/auth/canvas/callback', async (req, res) => {
         
         const userToken = response.data.access_token;
         
-        // sameSite: 'none' is mandatory for embedding in Canvas
         res.cookie('canvas_token', userToken, { 
             httpOnly: true, 
             secure: true, 
@@ -59,9 +57,13 @@ app.get('/auth/canvas/callback', async (req, res) => {
         });
         res.redirect('/'); 
     } catch (err) {
-        console.error('OAuth Error:', err.response?.data || err.message);
-        res.status(500).send('Login failed. Please refresh the page.');
+        res.status(500).send('Login failed. Refresh Canvas.');
     }
+});
+
+app.get('/logout', (req, res) => {
+    res.clearCookie('canvas_token');
+    res.redirect('/');
 });
 
 // --- API ROUTES ---
@@ -89,15 +91,22 @@ app.get('/api/courses', async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Courses error' }); }
 });
 
-// --- CATCH-ALL (FIXED FOR NODE V22) ---
+// --- THE FINAL NODE V22 FIX ---
 
-// This replaces the app.get('*') that was crashing your build
-app.get(/^(?!\/(api|login|auth|logout)).+/, (req, res) => {
+// Instead of using '*' which crashes Node v22, we use a specific list of 
+// known frontend routes, or use the "app.use" fallback which is safer.
+
+app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Root handler
-app.get('/', (req, res) => {
+// This is the most stable way to handle "everything else" in Node 22:
+app.use((req, res, next) => {
+    // If it's an API call that reached here, it doesn't exist (404)
+    if (req.url.startsWith('/api')) {
+        return res.status(404).json({ error: 'Not found' });
+    }
+    // Otherwise, serve the dashboard
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
